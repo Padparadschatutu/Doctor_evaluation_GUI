@@ -18,8 +18,8 @@ from flask import Flask, abort, flash, jsonify, redirect, render_template, reque
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_EXCEL_PATH = Path("/home/yfan/benchmark/doctor/merged_selected_cases_with_source_shuffled.xlsx")
-DEFAULT_IMAGE_ROOT = Path("/home/yfan/benchmark/bone/select_all_jpg")
+DEFAULT_EXCEL_PATH = Path("xxxxx")
+DEFAULT_IMAGE_ROOT = Path("xxxxx")
 DEFAULT_IMAGE_COL = "image_paths"
 DEFAULT_TEXT_COL = "analysis_result"
 OUTPUTS_DIR = BASE_DIR / "outputs"
