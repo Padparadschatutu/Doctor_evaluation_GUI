@@ -1,0 +1,594 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="card">
+    <div class="toolbar">
+      <div><strong>3) 标注</strong></div>
+      <div class="spacer"></div>
+      <div class="muted small">进度：{{ row_index + 1 }}/{{ total_rows }}（已标注 {{ annotated_count }} 条）</div>
+      <a class="btn" href="{{ url_for('export') }}">导出 zip 到本机</a>
+    </div>
+    <div class="muted small" style="margin-top:8px">
+      RowKey：<span class="mono">{{ row_key }}</span>
+    </div>
+    {% if current_operator %}
+      <div class="muted small" style="margin-top:4px">
+        操作者：<span class="mono">{{ current_operator }}</span>
+      </div>
+    {% endif %}
+    {% if state.annotation_path %}
+      <div class="muted small" style="margin-top:4px">
+        服务端自动保存：<span class="mono">{{ state.annotation_path }}</span>
+      </div>
+    {% endif %}
+  </div>
+
+  <div style="height:12px"></div>
+
+  <div class="review-layout">
+    <div class="review-main">
+      <div class="card image-card">
+        <div class="image-card-header muted small" style="padding:12px 16px 8px">图像（来自列：<span class="mono">{{ state.image_col }}</span>）</div>
+
+        {% if images|length == 0 %}
+          <div class="muted" style="padding-bottom:16px">该行无图像路径。</div>
+        {% endif %}
+
+        {% for img in images %}
+          <div class="image-entry">
+            <div class="image-meta muted small">
+              原始：<span class="mono">{{ img.raw }}</span>
+              <span class="muted">（{{ img.resolved_via }}）</span>
+            </div>
+            {% if img.exists and img.is_file %}
+              <div class="imgbox">
+                <div class="image-container">
+                  <img
+                    class="zoomable-image"
+                    src="{{ url_for('image', row_index=row_index, image_index=loop.index0) }}"
+                    alt="病例图像 {{ loop.index }}"
+                    data-caption="{{ img.path }}"
+                  />
+                  <div class="zoom-overlay" aria-hidden="true"></div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="review-sidebar">
+      <div id="review-sidebar-fixed" class="review-sidebar-fixed">
+        <div class="card sticky-card">
+          <div class="muted small" style="margin-bottom:8px">内容</div>
+          {% if boundary_highlight_terms or anatomy_highlight_terms or endosteal_highlight_terms or periosteal_highlight_terms or soft_tissue_highlight_terms or pathologic_fracture_highlight_terms or internal_feature_highlight_terms or auto_highlight_terms or global_highlight_terms %}
+            <div class="legend">
+              {% if boundary_highlight_terms %}
+                <div class="legend-item"><span class="legend-swatch hl-boundary"></span>边界</div>
+              {% endif %}
+              {% if anatomy_highlight_terms %}
+                <div class="legend-item"><span class="legend-swatch hl-anatomy"></span>首个解剖部位</div>
+              {% endif %}
+              {% if endosteal_highlight_terms %}
+                <div class="legend-item"><span class="legend-swatch hl-endosteal"></span>内膜侵蚀程度</div>
+              {% endif %}
+              {% if periosteal_highlight_terms %}
+                <div class="legend-item"><span class="legend-swatch hl-periosteal"></span>骨膜反应</div>
+              {% endif %}
+              {% if soft_tissue_highlight_terms %}
+                <div class="legend-item"><span class="legend-swatch hl-soft-tissue"></span>软组织肿块</div>
+              {% endif %}
+              {% if pathologic_fracture_highlight_terms %}
+                <div class="legend-item"><span class="legend-swatch hl-pathologic-fracture"></span>病理性骨折</div>
+              {% endif %}
+              {% if internal_feature_highlight_terms %}
+                <div class="legend-item"><span class="legend-swatch hl-internal-feature"></span>病变内部特征</div>
+              {% endif %}
+              {% if auto_highlight_terms or global_highlight_terms %}
+                <div class="legend-item"><span class="legend-swatch hl-generic"></span>其他高亮</div>
+              {% endif %}
+            </div>
+          {% endif %}
+          {% if auto_highlight_terms %}
+            <div class="muted small" style="margin-bottom:6px">
+              当前病例自动高亮已启用（来自列：<span class="mono">{{ state.highlight_col }}</span>）。
+            </div>
+          {% endif %}
+          {% if global_highlight_terms %}
+            <div class="muted small" style="margin-bottom:8px">
+              当前自动高亮词已启用。
+            </div>
+          {% endif %}
+          <div style="height:2.8em"></div>
+          <div id="review-text" class="text">{{ text_value }}</div>
+        </div>
+
+        <div style="height:12px"></div>
+
+        <div class="card">
+          <form id="annotation-form" method="post" action="{{ url_for('save', row_index=row_index) }}">
+            <div class="grid">
+              {% for field, label, allowed in rating_fields %}
+                <div class="field">
+                  <label>{{ label }}</label>
+                  <div class="options">
+                    {% for v in allowed %}
+                      <label class="opt">
+                        <input type="radio" name="{{ field }}" value="{{ v }}" {% if existing_values[field]==v %}checked{% endif %}/>
+                        <span class="mono">{{ v }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+
+            <div class="field" style="margin-top:12px">
+              <label for="note">备注</label>
+              <textarea id="note" name="note" placeholder="可填写补充说明、问题点或特殊情况">{{ existing_note }}</textarea>
+            </div>
+
+            <div style="margin-top:12px" class="toolbar">
+              <button id="action-prev" class="btn" type="submit" name="action" value="prev" {% if not has_prev %}disabled{% endif %}>保存并上一条</button>
+              <button id="action-next" class="btn primary" type="submit" name="action" value="next" {% if not has_next %}disabled{% endif %}>保存并下一条</button>
+              <button id="action-stay" class="btn" type="submit" name="action" value="stay">仅保存</button>
+              <div class="spacer"></div>
+              <input type="text" class="mono" name="jump_to" value="{{ row_index }}" style="max-width:120px" />
+              <button id="action-jump" class="btn" type="submit" name="action" value="jump">跳转</button>
+            </div>
+          </form>
+          <div id="autosave-status" class="muted small" style="margin-top:10px">已加载当前保存结果。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+  <div class="card muted small">
+    每位操作者的标注会自动保存到服务端独立目录；点击“导出 zip 到本机”会把当前操作者的 JSON/CSV/XLSX 一次性下载到本地。
+  </div>
+
+  <script>
+    (function () {
+      var form = document.getElementById("annotation-form");
+      var statusEl = document.getElementById("autosave-status");
+      var sidebarPlaceholderEl = document.querySelector(".review-sidebar");
+      var sidebarFixedEl = document.getElementById("review-sidebar-fixed");
+      var reviewTextEl = document.getElementById("review-text");
+      var autosaveUrl = {{ url_for('autosave', row_index=row_index) | tojson }};
+      var rawTextValue = {{ text_value | tojson }};
+      var autoHighlightTermsValue = {{ auto_highlight_terms | tojson }};
+      var boundaryHighlightTermsValue = {{ boundary_highlight_terms | tojson }};
+      var anatomyHighlightTermsValue = {{ anatomy_highlight_terms | tojson }};
+      var endostealHighlightTermsValue = {{ endosteal_highlight_terms | tojson }};
+      var periostealHighlightTermsValue = {{ periosteal_highlight_terms | tojson }};
+      var softTissueHighlightTermsValue = {{ soft_tissue_highlight_terms | tojson }};
+      var pathologicFractureHighlightTermsValue = {{ pathologic_fracture_highlight_terms | tojson }};
+      var internalFeatureHighlightTermsValue = {{ internal_feature_highlight_terms | tojson }};
+      var globalHighlightTermsValue = {{ global_highlight_terms | tojson }};
+      var hasPrev = {{ has_prev | tojson }};
+      var hasNext = {{ has_next | tojson }};
+      var saveTimer = null;
+      var dirty = false;
+      var savingPromise = null;
+      var rerunSave = false;
+      var zoomRegionDisplayPixels = 150;
+      var zoomFactor = 4;
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function escapeRegex(text) {
+        return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+
+      function parseHighlightTerms(value) {
+        var raw = String(value || "").trim();
+        var parts;
+        if (!raw) {
+          return [];
+        }
+        if (/[\n;；|]/.test(raw)) {
+          parts = raw.split(/[\n;；|]+/);
+        } else {
+          var commaParts = raw
+            .split(/[,，]+/)
+            .map(function (item) {
+              return item.trim();
+            })
+            .filter(Boolean);
+          parts = commaParts.length > 1 && commaParts.every(function (item) { return item.length <= 12; })
+            ? commaParts
+            : [raw];
+        }
+
+        return parts
+          .map(function (item) {
+            return item.trim();
+          })
+          .filter(function (item, index, arr) {
+            return item && arr.indexOf(item) === index;
+          })
+          .sort(function (a, b) {
+            return b.length - a.length;
+          });
+      }
+
+      function buildMatchList() {
+        var categories = [
+          { category: "boundary", terms: parseHighlightTerms(boundaryHighlightTermsValue), priority: 0 },
+          { category: "anatomy", terms: parseHighlightTerms(anatomyHighlightTermsValue).slice(0, 1), priority: 1 },
+          { category: "endosteal", terms: parseHighlightTerms(endostealHighlightTermsValue), priority: 2 },
+          { category: "soft-tissue", terms: parseHighlightTerms(softTissueHighlightTermsValue), priority: 3 },
+          { category: "periosteal", terms: parseHighlightTerms(periostealHighlightTermsValue), priority: 4 },
+          { category: "pathologic-fracture", terms: parseHighlightTerms(pathologicFractureHighlightTermsValue), priority: 5 },
+          { category: "internal-feature", terms: parseHighlightTerms(internalFeatureHighlightTermsValue), priority: 6 },
+          {
+            category: "generic",
+            terms: (function () {
+              var genericTerms = parseHighlightTerms(autoHighlightTermsValue);
+              parseHighlightTerms(globalHighlightTermsValue).forEach(function (item) {
+                if (genericTerms.indexOf(item) === -1) {
+                  genericTerms.push(item);
+                }
+              });
+              return genericTerms.sort(function (a, b) {
+                return b.length - a.length;
+              });
+            })(),
+            priority: 7
+          }
+        ];
+
+        var matches = [];
+        categories.forEach(function (group) {
+          group.terms.forEach(function (term) {
+            var regex = new RegExp(escapeRegex(term), "gi");
+            var match;
+            while ((match = regex.exec(rawTextValue)) !== null) {
+              matches.push({
+                start: match.index,
+                end: match.index + match[0].length,
+                text: match[0],
+                category: group.category,
+                priority: group.priority
+              });
+              if (regex.lastIndex === match.index) {
+                regex.lastIndex += 1;
+              }
+            }
+          });
+        });
+
+        matches.sort(function (a, b) {
+          if (a.start !== b.start) {
+            return a.start - b.start;
+          }
+          if ((b.end - b.start) !== (a.end - a.start)) {
+            return (b.end - b.start) - (a.end - a.start);
+          }
+          return a.priority - b.priority;
+        });
+
+        var selected = [];
+        var cursor = 0;
+        matches.forEach(function (item) {
+          if (item.start >= cursor) {
+            selected.push(item);
+            cursor = item.end;
+          }
+        });
+        return selected;
+      }
+
+      function renderReviewText() {
+        if (!reviewTextEl) {
+          return;
+        }
+
+        var matches = buildMatchList();
+        if (matches.length === 0) {
+          reviewTextEl.innerHTML = escapeHtml(rawTextValue).replace(/\n/g, "<br>");
+          return;
+        }
+
+        var output = "";
+        var lastIndex = 0;
+        matches.forEach(function (match) {
+          output += escapeHtml(rawTextValue.slice(lastIndex, match.start));
+          output += '<mark class="hl-' + match.category + '">' + escapeHtml(match.text) + "</mark>";
+          lastIndex = match.end;
+        });
+
+        output += escapeHtml(rawTextValue.slice(lastIndex));
+        reviewTextEl.innerHTML = output.replace(/\n/g, "<br>");
+      }
+
+      function syncFixedSidebar() {
+        if (!sidebarPlaceholderEl || !sidebarFixedEl) {
+          return;
+        }
+        if (window.innerWidth <= 900) {
+          sidebarPlaceholderEl.style.minHeight = "";
+          sidebarFixedEl.style.width = "";
+          sidebarFixedEl.style.left = "";
+          sidebarFixedEl.style.top = "";
+          sidebarFixedEl.style.maxHeight = "";
+          return;
+        }
+
+        var rect = sidebarPlaceholderEl.getBoundingClientRect();
+        var top = Math.max(18, rect.top);
+        var maxHeight = Math.max(240, window.innerHeight - top - 18);
+        sidebarFixedEl.style.width = rect.width + "px";
+        sidebarFixedEl.style.left = rect.left + "px";
+        sidebarFixedEl.style.top = top + "px";
+        sidebarFixedEl.style.maxHeight = maxHeight + "px";
+        sidebarPlaceholderEl.style.minHeight = sidebarFixedEl.offsetHeight + "px";
+      }
+
+      function setStatus(text, isError) {
+        if (!statusEl) {
+          return;
+        }
+        statusEl.textContent = text;
+        statusEl.style.color = isError ? "var(--danger)" : "";
+      }
+
+      function buildBody() {
+        return new URLSearchParams(new FormData(form));
+      }
+
+      function performAutosave(force) {
+        if (!form) {
+          return Promise.resolve(false);
+        }
+        if (!force && !dirty) {
+          return Promise.resolve(true);
+        }
+        if (savingPromise) {
+          rerunSave = rerunSave || dirty;
+          return savingPromise;
+        }
+
+        setStatus("自动保存中...", false);
+        savingPromise = fetch(autosaveUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+          },
+          credentials: "same-origin",
+          body: buildBody().toString()
+        })
+          .then(function (response) {
+            return response.json().then(function (data) {
+              if (!response.ok || !data.ok) {
+                throw new Error(data.error || "自动保存失败");
+              }
+              dirty = false;
+              setStatus("已自动保存 " + data.saved_at, false);
+              return true;
+            });
+          })
+          .catch(function (error) {
+            setStatus(error.message || "自动保存失败", true);
+            return false;
+          })
+          .finally(function () {
+            var shouldRerun = rerunSave;
+            rerunSave = false;
+            savingPromise = null;
+            if (shouldRerun && dirty) {
+              window.setTimeout(function () {
+                performAutosave(true);
+              }, 150);
+            }
+          });
+
+        return savingPromise;
+      }
+
+      function scheduleAutosave() {
+        dirty = true;
+        setStatus("等待自动保存...", false);
+        if (saveTimer) {
+          window.clearTimeout(saveTimer);
+        }
+        saveTimer = window.setTimeout(function () {
+          saveTimer = null;
+          performAutosave(false);
+        }, 500);
+      }
+
+      function submitAction(actionId) {
+        var button = document.getElementById(actionId);
+        if (!button || button.disabled || !form) {
+          return;
+        }
+        button.click();
+      }
+
+      if (form) {
+        form.addEventListener("change", function (e) {
+          var t = e.target;
+          if (t && t.name && t.name !== "jump_to" && t.name !== "action") {
+            scheduleAutosave();
+          }
+        });
+
+        form.addEventListener("input", function (e) {
+          var t = e.target;
+          if (t && t.name === "note") {
+            scheduleAutosave();
+          }
+        });
+
+        form.addEventListener("submit", function () {
+          dirty = false;
+          if (saveTimer) {
+            window.clearTimeout(saveTimer);
+            saveTimer = null;
+          }
+          setStatus("正在保存...", false);
+        });
+      }
+
+      renderReviewText();
+      syncFixedSidebar();
+
+      window.addEventListener("scroll", function () {
+        syncFixedSidebar();
+      }, { passive: true });
+
+      window.addEventListener("resize", function () {
+        syncFixedSidebar();
+      });
+
+      if (window.ResizeObserver && sidebarFixedEl) {
+        new ResizeObserver(function () {
+          syncFixedSidebar();
+        }).observe(sidebarFixedEl);
+      }
+
+      // 按住鼠标时在原图上叠加显示点击位置周围约 1cm 区域的 4 倍放大图。
+      document.querySelectorAll(".zoomable-image").forEach(function (img) {
+        var container = img.parentElement;
+        var overlay = container ? container.querySelector(".zoom-overlay") : null;
+        var isPressed = false;
+
+        if (!overlay) {
+          return;
+        }
+
+        function clamp(value, min, max) {
+          return Math.min(Math.max(value, min), max);
+        }
+
+        function showZoomBox(e) {
+          var rect;
+          var mouseX;
+          var mouseY;
+          var naturalWidth;
+          var naturalHeight;
+          var scaleX;
+          var scaleY;
+          var regionWidth;
+          var regionHeight;
+          var regionX;
+          var regionY;
+          var overlayWidth;
+          var overlayHeight;
+          var overlayLeft;
+          var overlayTop;
+
+          if (!isPressed) {
+            return;
+          }
+
+          rect = img.getBoundingClientRect();
+          mouseX = e.clientX - rect.left;
+          mouseY = e.clientY - rect.top;
+
+          if (mouseX < 0 || mouseY < 0 || mouseX > rect.width || mouseY > rect.height) {
+            overlay.classList.remove("active");
+            return;
+          }
+
+          naturalWidth = img.naturalWidth || 0;
+          naturalHeight = img.naturalHeight || 0;
+          if (!naturalWidth || !naturalHeight || !rect.width || !rect.height) {
+            overlay.classList.remove("active");
+            return;
+          }
+
+          scaleX = naturalWidth / rect.width;
+          scaleY = naturalHeight / rect.height;
+          regionWidth = Math.max(1, zoomRegionDisplayPixels * scaleX);
+          regionHeight = Math.max(1, zoomRegionDisplayPixels * scaleY);
+          regionX = clamp((mouseX * scaleX) - regionWidth / 2, 0, naturalWidth - regionWidth);
+          regionY = clamp((mouseY * scaleY) - regionHeight / 2, 0, naturalHeight - regionHeight);
+          overlayWidth = zoomRegionDisplayPixels * zoomFactor;
+          overlayHeight = zoomRegionDisplayPixels * zoomFactor;
+          overlayLeft = clamp(mouseX - overlayWidth / 2, 0, Math.max(0, rect.width - overlayWidth));
+          overlayTop = clamp(mouseY - overlayHeight / 2, 0, Math.max(0, rect.height - overlayHeight));
+
+          overlay.style.width = overlayWidth + "px";
+          overlay.style.height = overlayHeight + "px";
+          overlay.style.left = overlayLeft + "px";
+          overlay.style.top = overlayTop + "px";
+          overlay.style.backgroundImage = 'url("' + (img.currentSrc || img.src) + '")';
+          overlay.style.backgroundRepeat = "no-repeat";
+          overlay.style.backgroundSize = (rect.width * zoomFactor) + "px " + (rect.height * zoomFactor) + "px";
+          overlay.style.backgroundPosition = (-regionX * zoomFactor / scaleX) + "px " + (-regionY * zoomFactor / scaleY) + "px";
+          overlay.classList.add("active");
+        }
+
+        function hideZoomBox() {
+          isPressed = false;
+          overlay.classList.remove("active");
+        }
+
+        img.addEventListener("mousedown", function (e) {
+          if (e.button !== 0) {
+            return;
+          }
+          e.preventDefault();
+          isPressed = true;
+          showZoomBox(e);
+        });
+
+        img.addEventListener("mousemove", function (e) {
+          if (isPressed) {
+            showZoomBox(e);
+          }
+        });
+
+        img.addEventListener("mouseleave", hideZoomBox);
+        img.addEventListener("dragstart", function (e) {
+          e.preventDefault();
+        });
+        document.addEventListener("mouseup", hideZoomBox);
+      });
+
+      document.addEventListener("keydown", function (e) {
+        var t = e.target;
+        if (
+          t &&
+          (t.tagName === "INPUT" ||
+            t.tagName === "TEXTAREA" ||
+            t.tagName === "SELECT" ||
+            t.isContentEditable)
+        ) {
+          return;
+        }
+
+        if (e.key === "ArrowLeft" && hasPrev) {
+          e.preventDefault();
+          submitAction("action-prev");
+          return;
+        }
+
+        if (e.key === "ArrowRight" && hasNext) {
+          e.preventDefault();
+          submitAction("action-next");
+        }
+      });
+
+      window.addEventListener("beforeunload", function () {
+        if (saveTimer) {
+          window.clearTimeout(saveTimer);
+          saveTimer = null;
+        }
+        if (dirty) {
+          performAutosave(true);
+        }
+      });
+    })();
+  </script>
+{% endblock %}

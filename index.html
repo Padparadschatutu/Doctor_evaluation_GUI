@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="card">
+    <h3 style="margin-top:0">1) 加载 Excel</h3>
+    <form method="post" action="{{ url_for('load') }}">
+      <div class="grid">
+        <div>
+          <div class="muted small" style="margin-bottom:6px">操作者（必填，用于隔离三个人的标注结果）</div>
+          <input type="text" name="operator_id" value="{{ current_operator }}" placeholder="例如：alice / bob / carol" required />
+        </div>
+        <div>
+          <div class="muted small" style="margin-bottom:6px">Excel 路径（可绝对/相对路径）</div>
+          <input type="text" name="excel_path" value="{% if state and state.excel_path %}{{ state.excel_path }}{% else %}{{ default_excel_path }}{% endif %}" placeholder="例如：/home/.../cases.xlsx 或 ./excel/cases.xlsx" />
+        </div>
+      </div>
+      <div class="grid" style="margin-top:12px">
+        <div>
+          <div class="muted small" style="margin-bottom:6px">Sheet 名称（可选）</div>
+          <input type="text" name="sheet_name" value="{% if state and state.sheet_name %}{{ state.sheet_name }}{% endif %}" placeholder="留空表示默认第一个 Sheet" />
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="muted small" style="margin-bottom:6px">图片根目录（可选，用于路径回退/映射）</div>
+        <input
+          type="text"
+          name="image_root"
+          value="{% if state and state.image_root %}{{ state.image_root }}{% else %}{{ default_image_root }}{% endif %}"
+          placeholder="例如：/home/yfan/benchmark/bone/select_jpg_sample600"
+        />
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn primary" type="submit">加载</button>
+      </div>
+    </form>
+
+    <div style="margin-top:14px" class="muted small">
+      提示：图片路径列可以是绝对路径，或相对 Excel 文件所在目录的相对路径（如 <span class="mono">images/xxx.jpg</span>）。
+      如果 Excel 里的绝对路径在本机不存在，可填写“图片根目录”，系统会尝试用路径后缀去匹配实际文件。
+    </div>
+  </div>
+
+  {% if state and state.is_loaded() %}
+    <div style="height:12px"></div>
+    <div class="card">
+      <h3 style="margin-top:0">当前状态</h3>
+      <div class="muted">当前操作者：<span class="mono">{{ state.operator_id }}</span></div>
+      <div class="muted">已加载 {{ state.excel_path }}，共 {{ state.df|length }} 行。</div>
+      {% if state.annotation_path %}
+        <div class="muted">自动保存：<span class="mono">{{ state.annotation_path }}</span></div>
+      {% endif %}
+      <div style="margin-top:12px" class="toolbar">
+        <a class="btn primary" href="{{ url_for('config') }}">去列配置</a>
+        {% if state.is_configured() %}
+          <a class="btn" href="{{ url_for('index') }}">开始标注</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

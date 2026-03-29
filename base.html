@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title or "Excel 图像标注 GUI" }}</title>
+    <style>
+      :root { --bg:#0b1020; --card:#121a33; --text:#e7e9ef; --muted:#a7b0c2; --border:#273255; --primary:#5b8cff; --danger:#ff6b6b; }
+      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "Liberation Sans", sans-serif; font-size:16px; background:var(--bg); color:var(--text); }
+      a { color: var(--primary); text-decoration: none; }
+      .wrap { max-width: 1600px; margin: 0 auto; padding: 18px; }
+      .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+      .row { display:flex; gap:16px; align-items:flex-start; }
+      .col { flex:1; min-width:0; }
+      .muted { color: var(--muted); }
+      .flash { background: #13224a; border: 1px solid #223b7d; padding: 10px 12px; border-radius: 10px; margin: 12px 0; }
+      .flash.error { background: #4a1220; border: 3px solid #ff6b6b; color: #ffdddd; font-size: 18px; font-weight: 600; padding: 16px 20px; box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3); animation: shake 0.5s; }
+      @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+      input[type="text"], select, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: #0e1530; color: var(--text); box-sizing: border-box; }
+      textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+      .btn { display:inline-flex; gap:8px; align-items:center; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: #0e1530; color: var(--text); cursor:pointer; }
+      .btn.primary { background: #2140a8; border-color: #2f58e7; }
+      .btn.danger { background: #3a1220; border-color: #7a1f3b; }
+      .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      .grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .field { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: #0e1530; }
+      .field label { display:block; font-weight: 600; margin-bottom: 8px; font-size: 18px; }
+      .options { display:flex; gap: 10px; flex-wrap: wrap; }
+      .opt { display:inline-flex; gap:8px; align-items:center; padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px; background: #0b1020; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      .text { white-space: pre-wrap; line-height: 1.8; font-size: 20px; }
+      .text mark { padding: 0 2px; border-radius: 4px; }
+      .hl-boundary { background: #ffb3c1; color: #3a0712; }
+      .hl-anatomy { background: #7bdff2; color: #062833; }
+      .hl-endosteal { background: #ffd166; color: #3c2600; }
+      .hl-periosteal { background: #f4a261; color: #402208; }
+      .hl-soft-tissue { background: #b8f2e6; color: #08342c; }
+      .hl-pathologic-fracture { background: #e5989b; color: #471014; }
+      .hl-internal-feature { background: #e6f7d9; color: #234018; }
+      .hl-generic { background: #d9d9d9; color: #202020; }
+      .legend { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+      .legend-item { display:inline-flex; align-items:center; gap:6px; font-size:12px; color: var(--muted); }
+      .legend-swatch { width:12px; height:12px; border-radius: 3px; display:inline-block; }
+      .imgbox { border: 1px solid var(--border); border-radius: 12px; background: #0b1020; display:flex; justify-content:center; align-items:center; padding: 16px; min-height: 520px; }
+      .imgbox img { width:100%; max-width:100%; max-height:min(78vh, 980px); height:auto; display:block; cursor: zoom-in; border-radius: 8px; object-fit: contain; }
+      .review-layout { display:flex; gap:16px; align-items:flex-start; }
+      .review-main { flex: 0 0 55%; max-width: 55%; min-width: 0; }
+      .review-sidebar { flex: 0 0 45%; max-width: 45%; min-width: 0; align-self: flex-start; }
+      .review-sidebar-fixed { position: fixed; top: 18px; max-height: calc(100vh - 36px); overflow: auto; }
+      .sticky-card { position: static; max-height: none; overflow: visible; }
+      .image-card { padding: 0; overflow: hidden; }
+      .image-card-header { padding-bottom: 8px; }
+      .image-entry { margin: 0 0 12px; }
+      .image-meta { padding: 12px 16px 8px; }
+      .imgbox { border: 0; border-radius: 0; background: transparent; display:block; padding: 0; min-height: 0; }
+      .imgbox img { width:100%; height:auto; max-width:100%; max-height:none; display:block; cursor: zoom-in; border-radius: 0; object-fit: contain; background: transparent; }
+      .image-container { position: relative; display: inline-block; width: 100%; }
+      .zoom-overlay { position: absolute; border: 3px solid #5b8cff; box-shadow: 0 0 20px rgba(91, 140, 255, 0.8), inset 0 0 20px rgba(0, 0, 0, 0.3); border-radius: 8px; overflow: hidden; pointer-events: none; background: #000; display: none; z-index: 100; }
+      .zoom-overlay.active { display: block; }
+      .zoom-overlay img { position: absolute; pointer-events: none; }
+      .lightbox { position: fixed; inset: 0; background: rgba(4, 8, 18, 0.92); display:none; align-items:center; justify-content:center; padding: 24px; z-index: 999; }
+      .lightbox.open { display:flex; }
+      .lightbox-inner { max-width: min(96vw, 1500px); max-height: 92vh; display:flex; flex-direction:column; gap: 10px; position: relative; }
+      .lightbox img { width:auto; max-width:100%; max-height:84vh; height:auto; border-radius: 12px; box-shadow: 0 24px 80px rgba(0,0,0,0.45); }
+      .lightbox-caption { text-align:center; color: var(--muted); font-size: 14px; word-break: break-all; }
+      .lightbox-zoom-box { position: absolute; border: 3px solid #5b8cff; box-shadow: 0 0 20px rgba(91, 140, 255, 0.6), inset 0 0 20px rgba(0, 0, 0, 0.3); border-radius: 8px; overflow: hidden; pointer-events: none; background: #000; display: none; }
+      .lightbox-zoom-box.active { display: block; }
+      .toolbar { display:flex; gap:10px; align-items:center; flex-wrap: wrap; }
+      .spacer { flex: 1; }
+      .small { font-size: 12px; }
+      @media (max-width: 900px) {
+        .row { flex-direction: column; }
+        .review-layout { flex-direction: column; }
+        .review-main, .review-sidebar { flex: 1 1 auto; max-width: none; width: 100%; }
+        .review-sidebar-fixed { position: static; top: auto; max-height: none; overflow: visible; width: auto !important; left: auto !important; }
+        .sticky-card { position: static; max-height: none; overflow: visible; }
+        .grid { grid-template-columns: 1fr; }
+        .text { font-size: 18px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="toolbar">
+        <div><strong>Excel 图像标注 GUI</strong></div>
+        <div class="spacer"></div>
+        {% if current_operator %}
+          <div class="small muted">操作者：<span class="mono">{{ current_operator }}</span></div>
+        {% endif %}
+        {% if state and state.excel_path %}
+          <div class="small muted">当前文件：<span class="mono">{{ state.excel_path }}</span></div>
+        {% endif %}
+        <div><a class="btn" href="{{ url_for('index', force_home=1) }}">首页</a></div>
+        {% if state and state.is_loaded() %}
+          <div><a class="btn" href="{{ url_for('config') }}">列配置</a></div>
+        {% endif %}
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash {% if category == 'error' %}error{% endif %}" style="{% if category == 'error' %}font-size: 18px; font-weight: 600; border-width: 2px; padding: 14px 16px;{% endif %}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </div>
+  </body>
+</html>
